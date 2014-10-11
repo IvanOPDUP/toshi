@@ -11,6 +11,7 @@ module Toshi
       set :root,            File.dirname(File.dirname(File.dirname(__FILE__)))
       set :public_folder,   Proc.new { File.join(root, "toshi/web/static") }
       set :views,           Proc.new { File.join(root, "toshi/web/views") }
+      set :show_exceptions, false
 
       error NotFoundError do
         content_type 'application/json'
@@ -20,6 +21,11 @@ module Toshi
       error InvalidFormatError do
         content_type 'application/json'
         [406, {error: "Response format is not supported"}.to_json]
+      end
+
+      error Toshi::Processor::ValidationError do
+        content_type 'application/json'
+        [400, {error: env['sinatra.error'].message }.to_json]
       end
 
       def pretty_number(number)

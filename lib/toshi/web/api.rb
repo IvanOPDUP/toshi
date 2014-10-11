@@ -4,6 +4,7 @@ module Toshi
   module Web
 
     class Api < Toshi::Web::Base
+      include Logging
       helpers do
         def format
           fmt = params[:format].to_s
@@ -88,14 +89,16 @@ module Toshi
         begin
           ptx = Bitcoin::P::Tx.new([params[:hex]].pack("H*"))
         rescue
-          return { error: 'malformed transaction' }.to_json
+          raise Toshi::Processor::TxValidationError, "#{ptx.hash} is malformed."
         end
         if Toshi::Models::UnconfirmedRawTransaction.where(hsh: ptx.hash).first
-          return { error: 'transaction already received' }.to_json
+          raise Toshi::Processor::ValidationError, "Transaction #{ptx.hash} already received"
         end
-        Toshi::Models::UnconfirmedRawTransaction.create(hsh: ptx.hash, payload: Sequel.blob(ptx.payload))
-        Toshi::Workers::TransactionWorker.perform_async ptx.hash, { 'sender' => nil }
-        { hash: ptx.hash }.to_json
+
+        tx = Toshi::Models::UnconfirmedRawTransaction.create(hsh: ptx.hash, payload: Sequel.blob(ptx.payload))
+        result = Toshi::Processor.new.process_transaction(tx.bitcoin_tx, raise_error=true) # may raise a ValidationError
+
+        { hash: ptx.hash, result: result }.to_json
       end
 
       get '/transactions/unconfirmed' do

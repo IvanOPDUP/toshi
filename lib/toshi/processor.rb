@@ -160,14 +160,14 @@ module Toshi
 
       # Context-free verification of the transaction.
       if !self.check_transaction(tx, state)
-        raise TxValidationError, "AcceptToMemoryPool() : check_transaction failed"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} check_transaction failed"
         return false
       end
 
       # Coinbase is only valid in a block, not as a loose transaction
       if tx.is_coinbase?
         # DoS 100
-        raise TxValidationError, "AcceptToMemoryPool() : coinbase as individual tx"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} coinbase as individual tx"
         return false
       end
 
@@ -175,7 +175,7 @@ module Toshi
       if require_standard?
         is_standard, reason = self.is_standard_tx?(tx)
         if !is_standard
-          raise TxValidationError, "AcceptToMemoryPool() : nonstandard transaction: #{reason}"
+          raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} nonstandard transaction: #{reason}"
           return false
         end
       end
@@ -185,19 +185,19 @@ module Toshi
 
       # Is it already in the memory pool?
       if @mempool.exists?(tx.binary_hash)
-        raise TxValidationError, "AcceptToMemoryPool() : already in the memory pool"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} already in the memory pool"
         return false
       end
 
       # Check for conflicts with in-memory transactions
       if @mempool.any_inputs_spent?(tx)
-        raise TxValidationError, "AcceptToMemoryPool() : already spent in the memory pool"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} already spent in the memory pool"
         return false
       end
 
       # Check to see if we have the tx on the main branch or the memory pool already.
       if !expect_tip && @mempool.exists_including_main_branch?(tx.binary_hash)
-        raise TxValidationError, "AcceptToMemoryPool() : transaction already seen"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} transaction already seen"
         return false
       end
 
@@ -207,7 +207,8 @@ module Toshi
       tx.inputs.each do |txin|
         if !@mempool.exists_including_main_branch?(txin.prev_out)
           # this tx is an orphan -- missing parent input.
-          raise TxMissingInputsError, "AcceptToMemoryPool() : transaction missing inputs"
+          prev_out = txin.prev_out.unpack("H*")
+          raise TxMissingInputsError, "AcceptToMemoryPool() : #{tx.hash} transaction missing inputs #{prev_out}"
           return false
         end
       end
@@ -217,7 +218,7 @@ module Toshi
 
       # Are the actual inputs available?
       if !self.verify_inputs_are_available(tx, include_memory_pool=true)
-        raise TxValidationError, "AcceptToMemoryPool() : inputs already spent"
+        raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} inputs already spent"
         # TODO:
         #     return state.Invalid(error("AcceptToMemoryPool() : inputs already spent"),
         #                          REJECT_DUPLICATE, "bad-txns-inputs-spent");
@@ -228,7 +229,7 @@ module Toshi
 
       if require_standard?
         if !are_inputs_standard?(tx)
-          raise TxValidationError, "AcceptToMemoryPool() : nonstandard transaction input"
+          raise TxValidationError, "AcceptToMemoryPool() : #{tx.hash} nonstandard transaction input"
           return false
         end
       end
